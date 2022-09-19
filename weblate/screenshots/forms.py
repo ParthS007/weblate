@@ -18,6 +18,8 @@
 #
 
 from django import forms
+from django.core.files.base import ContentFile
+from django.utils.text import slugify
 
 from weblate.screenshots.models import Screenshot
 from weblate.trans.forms import QueryField
@@ -40,6 +42,8 @@ class LanguageChoiceField(forms.ModelChoiceField):
 class ScreenshotForm(forms.ModelForm):
     """Screenshot upload."""
 
+    image_container = forms.CharField(required=False, widget=forms.HiddenInput())
+
     class Meta:
         model = Screenshot
         fields = ("name", "image", "translation")
@@ -57,6 +61,20 @@ class ScreenshotForm(forms.ModelForm):
             "translation"
         ].queryset = component.translation_set.prefetch_related("language")
         self.fields["translation"].initial = component.source_translation
+
+    def save(self, commit=True):
+        self.instance.image.delete(False)
+        imgdata = self.cleaned_data["image_container"].split(",")
+        try:
+            ftype = imgdata[0].split(";")[0].split("/")[1]
+            fname = slugify(self.instance.title)
+            self.instance.image.save(
+                f"path/{fname}.{ftype}",
+                ContentFile(imgdata[1].decode("base64")),
+            )
+        except Exception:
+            pass
+        return super().save(commit=commit)
 
 
 class SearchForm(forms.Form):
